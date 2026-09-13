@@ -11,11 +11,11 @@ from pathlib import Path
 from decimal import Decimal
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 # Load environment
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).parent.parent / ".env")
+load_dotenv(Path(__file__).parent / ".env")
 
 def main():
     """Main pipeline entry point."""

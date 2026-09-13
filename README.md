@@ -1,4 +1,4 @@
-# HackerRank Orchestrate
+# HackerRank Orchestrate — Buy or Wait?
 
 Starter repository for the **HackerRank Orchestrate** 24-hour hackathon (September 2026).
 
@@ -18,176 +18,239 @@ Read [`problem_statement.md`](./problem_statement.md) for the full task spec, in
 
 ---
 
-## Quick Start
+## Fedora Linux Setup
 
-Clone the repository and move into the project directory:
+### Prerequisites (Fedora 38+)
 
 ```bash
-git clone https://github.com/interviewstreet/hackerrank-orchestrate-september26.git
+sudo dnf install -y python3.11 python3.11-devel python3-pip git
+```
+
+### Project Setup
+
+```bash
+# Clone repository
+git clone https://github.com/rehaan-ahmad/hackerrank-orchestrate-september26.git
 cd hackerrank-orchestrate-september26
+
+# Create virtual environment (must be .venv/)
+python3.11 -m venv .venv
+source .venv/bin/activate
+
+# Upgrade pip
+pip install --upgrade pip
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-Build your solution in `code/main.py`, or use another language and document its entry point clearly.
-
-Your solution must:
-
-- Read the input files from `dataset/`
-- Generate one prediction for every request
-- Write the final predictions to `output.csv` in the repository root
-
-Run the starter Python entry point with:
+### Environment Configuration
 
 ```bash
-python3 code/main.py
+# Copy example environment file
+cp .env.example .env
+
+# Edit .env and add your Anthropic API key
+# ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-After running your solution, confirm that `output.csv` exists in the repository root and contains the required columns and one row for every request.
+### Verify Setup
 
-## Important File Locations
-
-```text
-dataset/        Input data and the blank output template. Do not modify the input data.
-code/           Your solution code.
-output.csv      Final generated predictions in the repository root.
-code.zip        ZIP file containing your complete solution for submission.
+```bash
+python setup_check.py
 ```
 
-The blank template at `dataset/output.csv` is provided as a reference. Your final generated file must be the root-level `output.csv`.
-
----
-
-## Repository Layout
-
-```text
-.
-├── AGENTS.md                         # Rules for AI coding tools + transcript logging
-├── problem_statement.md              # Full challenge statement
-├── README.md                         # You are here
-├── code/                             # Your solution code
-├── output.csv                        # Final generated predictions
-└── dataset/
-    ├── requests.csv                  # 250 requests to evaluate — predict these
-    ├── output.csv                    # Blank submission template
-    ├── sample_requests.csv           # 25 solved examples
-    ├── financial_profiles.csv        # Balances, minimum balance, priorities, preferences
-    ├── financial_events.csv          # Historical, pending, and confirmed transactions
-    ├── request_payment_options.csv   # Payment options available per request
-    ├── exchange_rates.csv            # Fixed, dated conversion rates
-    ├── messages.csv                  # Messages tied to users, requests, or events
-    ├── images.csv                    # Payroll letters, statements, bills, receipts
-    └── media/
-        └── images/
+Expected output:
+```
+============================================================
+BUY OR WAIT? - SETUP VERIFICATION
+============================================================
+[PASS] Python Version: Python 3.11.x
+[PASS] Imports: All imports successful
+[PASS] API Key: ANTHROPIC_API_KEY is set
+[PASS] Dataset Files: All 8 dataset files present
+[PASS] Media Images: 16 PNG images found
+[PASS] Project Structure: Project structure matches architecture.md
+[PASS] API Connectivity: API connectivity verified
+============================================================
+ALL CHECKS PASSED ✓
 ```
 
-Only `dataset/requests.csv` requires predictions. Everything else is context. Join user records with `user_id`, request records with `request_id`, supporting evidence with `related_event_id`, and exchange rates with the rate date and currency pair.
-
-Amounts are in the user's `home_currency` — the dataset uses INR, ZAR, IDR, USD, and EUR, and every conversion rate you need is in `exchange_rates.csv`. All dates are `YYYY-MM-DD`. Live exchange rates, market data, and banking access are not required.
-
 ---
 
-## What You Need to Build
+## Running the Solution
 
-For every row in `dataset/requests.csv`, produce one row in `output.csv` with:
+```bash
+# Activate venv (if not already)
+source .venv/bin/activate
 
-| Column | Meaning |
-|---|---|
-| `request_id` | The request being answered |
-| `amount_safe_to_pay` | Largest amount safe to pay on `request_date` before optional spending changes, after protecting essentials and the minimum balance |
-| `affordability_status` | `affordable_now`, `affordable_with_plan`, `affordable_later`, or `not_affordable` |
-| `recommended_payment_method` | `full_payment`, `partial_payment`, `installments`, `wait`, or `not_recommended` |
-| `payment_plan` | Chronological `<YYYY-MM-DD>:<amount>` entries joined by `\|`, or `none` |
-| `earliest_date_for_full_payment` | Earliest date the full amount is forecast safe as one payment; empty if never within the forecast |
-| `spending_changes_needed` | Up to three `stop:<event_id>` / `reduce_to:<event_id>:<amount>` changes joined by `\|`, or `none` |
-| `decision_explanation` | Short explanation and the financial facts behind it |
-
-`0 <= amount_safe_to_pay <= requested_amount` must always hold. Installment plans must exactly match a supplied payment option, and only recurring expenses marked flexible may be changed.
-
-`affordable_with_plan` means the full request is completed through a partial-payment schedule, installments, or permitted spending changes. Recommend `partial_payment` only when the request allows it, the user accepts it, `0 < amount_safe_to_pay < requested_amount`, and `earliest_date_for_full_payment` is on or before `desired_completion_date`. Use exactly two payments: pay `amount_safe_to_pay` on `request_date`, then pay the remaining amount on `earliest_date_for_full_payment`. The two payments must add up to `requested_amount`. Unlike installments, partial payment does not need to match a supplied payment option.
-
----
-
-## Suggested Workflow
-
-1. Inspect `dataset/sample_requests.csv` — 25 requests with completed output columns — to understand the expected format and decision style.
-2. Reconstruct each user's financial state from `financial_profiles.csv` and `financial_events.csv`: separate recurring expenses from one-time events, reserve pending transactions, count confirmed salary only on its settlement date, and de-duplicate repeated representations of the same event.
-3. When an event has a blank `amount`, find its `event_id` as `related_event_id` in `images.csv` and extract the amount from the linked image. Never treat a blank amount as zero. Pull in any other relevant messages, images, and payment options for the request.
-4. Forecast forward and generate a plan that keeps the balance above the minimum at every step.
-5. Verify deterministically — bounds, plan feasibility, schedule match, flexible-only spending changes — before writing `output.csv`.
-6. Score yourself on the solved samples, then run the full dataset.
-
-You may use any language or runtime. Python, JavaScript, and TypeScript are all reasonable choices.
-
----
-
-## Requirements
-
-Your solution must:
-
-- be runnable from the terminal
-- read the provided files from `dataset/`
-- produce a valid `output.csv` with the exact required columns in the exact required order
-- include one prediction for every `request_id` in `dataset/requests.csv`
-- not use organizer-only files or hardcoded labels
-- keep behavior deterministic where possible
-
-If you use API keys or secrets, read them from environment variables. Never hardcode secrets in the repo.
-
----
-
-## Evaluation
-
-Your `output.csv` will be compared against hidden ground-truth values.
-
-The scoring will consider:
-
-- accuracy of `amount_safe_to_pay`
-- correctness of `affordability_status`
-- correctness of `recommended_payment_method` and `payment_plan`
-- accuracy of `earliest_date_for_full_payment`
-- validity of `spending_changes_needed`
-- usefulness and consistency of `decision_explanation`
-
-### Token Usage And Cost Analysis
-
-Your `code.zip` must include one token-usage file:
-
-```text
-evaluation/usage_report.md
+# Run the main pipeline
+python main.py
 ```
 
-The report must cover model providers and names, model calls, input and output tokens, total and average tokens per request, estimated total and per-request cost. The reported values must correspond to the final full-dataset run that produced your `output.csv`.
+### Expected Output
+
+- `output.csv` in repository root with 250 rows (one per request in `dataset/requests.csv`)
+- `evaluation/usage_report.md` with token usage summary
+
+### Columns in output.csv (exact order required):
+
+```
+request_id,amount_safe_to_pay,affordability_status,recommended_payment_method,payment_plan,earliest_date_for_full_payment,spending_changes_needed,decision_explanation
+```
+
+### Validation Requirements
+
+- `0 <= amount_safe_to_pay <= requested_amount`
+- `affordability_status` ∈ {affordable_now, affordable_with_plan, affordable_later, not_affordable}
+- `recommended_payment_method` ∈ {full_payment, partial_payment, installments, wait, not_recommended}
+- `payment_plan` = "none" or chronological `YYYY-MM-DD:amount|YYYY-MM-DD:amount`
+- `earliest_date_for_full_payment` = "" for not_affordable, valid date otherwise
+- `spending_changes_needed` = "none" or `stop:event_X|reduce_to:event_Y:amount`
+- Installment plans must match a supplied payment option exactly
 
 ---
 
-## Chat Transcript Logging
+## Project Structure
 
-This repo includes an [`AGENTS.md`](./AGENTS.md) file for AI coding tools. It asks compatible tools to append conversation summaries to a `log.txt` in the repository root — the same directory as `AGENTS.md`:
+```
+project/
+├── src/
+│   ├── __init__.py
+│   ├── data_loader.py          # CSV loading, joining, indexing
+│   ├── financial_engine.py     # Core affordability logic
+│   ├── fx_converter.py         # Exchange rate conversion with chaining
+│   ├── llm_client.py           # Anthropic SDK wrapper with batching/caching
+│   ├── plan_selector.py        # Plan generation, ranking, tiebreakers
+│   ├── output_formatter.py     # Output validation & CSV writing
+│   ├── models.py               # Pydantic domain models
+│   └── utils.py                # Helpers (date parsing, Decimal, etc.)
+├── dataset/                    # (provided data)
+│   ├── financial_profiles.csv
+│   ├── financial_events.csv
+│   ├── exchange_rates.csv
+│   ├── requests.csv
+│   ├── sample_requests.csv
+│   ├── request_payment_options.csv
+│   ├── messages.csv
+│   ├── images.csv
+│   ├── output.csv
+│   └── media/
+│       └── images/*.png
+├── evaluation/
+│   └── usage_report.md         # Token usage summary (auto-generated)
+├── cache/
+│   ├── image_extractions.json  # Cached OCR results
+│   ├── message_interpretations.json
+│   └── explanation_cache.json
+├── tests/
+│   ├── test_fx_converter.py
+│   ├── test_financial_engine.py
+│   ├── test_plan_selector.py
+│   └── test_samples.py         # Validates all 25 samples exact match
+├── output.csv                  # Generated submission
+├── main.py                     # Entry point
+├── requirements.txt
+├── .env                        # ANTHROPIC_API_KEY (not committed)
+├── .env.example                # Template
+├── .gitignore
+├── setup_check.py              # Setup verification
+├── README.md                   # This file
+└── architecture.md             # System design document
+```
 
-| Platform | Path |
-|---|---|
-| macOS / Linux | `<repo root>/log.txt` |
-| Windows | `<repo root>\log.txt` |
+---
 
-The path resolves relative to `AGENTS.md`, so it stays correct across clones, renames, and checkouts. `log.txt` is gitignored — upload it as your chat transcript at submission time. Do not paste secrets into the chat.
+## Key Implementation Details
 
-In case, the harness you are using is not in the repo root, you can explicitly ask the agent to look for the AGENTS.md in this folder & then continue.
+### Technology Stack
+
+| Component | Technology | Version |
+|-----------|------------|---------|
+| Language | Python | 3.11+ |
+| Data Processing | pandas | 2.2+ |
+| Numeric Precision | Python `decimal.Decimal` | stdlib |
+| LLM Client | Anthropic Python SDK | 0.40+ |
+| Vision (Images) | Anthropic API (base64) | — |
+| Image Preprocessing | Pillow | 10+ |
+| Config | python-dotenv | 1.0+ |
+| Validation | pydantic | 2.9+ |
+| Testing | pytest | 8.3+ |
+| Logging | structlog | 24+ |
+
+### Financial Engine Rules (from problem_statement.md)
+
+1. **Available Balance**: Start with `current_available_balance`, add settled credits ≤ request_date, subtract settled debits ≤ request_date, **reserve pending debits**, ignore pending credits/scheduled income/unrealized gains
+2. **90-Day Forecast**: request_date (exclusive) to request_date + 90 days (inclusive); include scheduled income on settlement_date; detect recurrence only with ≥3 historical occurrences
+3. **Currency Conversion**: All amounts in user's `home_currency`; use `exchange_rates.csv` on settlement_date (nearest prior 15th); chain via USD if direct pair missing
+4. **Spending Changes**: Max 3 changes; only non-protected, flexible events in categories user permits; reduction respects `minimum_allowed_amount`
+5. **Plan Ranking** (6 tiebreakers):
+   1. Complete by desired_completion_date
+   2. No spending changes
+   3. Minimize total_payable_amount
+   4. Earliest start date
+   5. Fewest payments
+   6. Lowest payment_option_id
+
+### LLM Call Strategy
+
+| Call Type | Purpose | Model | Batching |
+|-----------|---------|-------|----------|
+| Vision | Extract amounts from 16 images | claude-sonnet-4-6 | Single multi-image call |
+| Messages | Parse salary changes, cancellations | claude-sonnet-4-6 | Batched by user |
+| Explanations | Generate decision_explanation | claude-sonnet-4-6 | 25-50 requests per call |
+
+---
+
+## Testing
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_samples.py -v
+
+# Run with coverage
+pytest tests/ --cov=src --cov-report=term-missing
+```
+
+The `test_samples.py` validates that all 25 samples in `dataset/sample_requests.csv` reproduce exactly.
+
+---
+
+## Token Usage Report
+
+The solution automatically generates `evaluation/usage_report.md` with:
+- Total API calls
+- Input/output tokens per call type
+- Estimated total and per-request cost
+- Model provider and name
 
 ---
 
 ## Submission
 
-Submit the following files as instructed by HackerRank:
+Submit these three files to HackerRank:
 
 | File | Description |
-|---|---|
-| `code.zip` | Full runnable solution, prompts/configuration, README, and the required `evaluation/` folder |
-| `output.csv` | Predictions for every row in `dataset/requests.csv` |
-| `chat_transcript` | The `log.txt` described above, showing how you developed or used the system |
+|------|-------------|
+| `code.zip` | Full runnable solution, prompts/config, README, `evaluation/` folder |
+| `output.csv` | Predictions for all 250 requests in `dataset/requests.csv` |
+| `chat_transcript` | The `log.txt` file showing development conversation |
 
-Before submitting, confirm:
+### Pre-Submission Checklist
 
-- `output.csv` has one row per row in `dataset/requests.csv` (250 rows plus the header).
-- `output.csv` has the exact required columns in the exact required order.
-- Every `amount_safe_to_pay` satisfies `0 <= amount_safe_to_pay <= requested_amount`.
-- Every installment plan matches a supplied payment option, and every spending change targets a flexible recurring expense.
-- Your runnable code, setup instructions, and `evaluation/` folder are included in `code.zip`.
+- [ ] `output.csv` has 250 rows + header
+- [ ] `output.csv` columns in exact required order
+- [ ] All `amount_safe_to_pay` satisfy `0 <= amount <= requested_amount`
+- [ ] Installment plans match supplied payment options exactly
+- [ ] Spending changes target only flexible recurring expenses
+- [ ] `code.zip` includes `evaluation/usage_report.md`
+- [ ] No API keys or secrets in submission
+
+---
+
+## License
+
+For HackerRank Orchestrate September 2026 hackathon use only.

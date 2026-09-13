@@ -1,0 +1,121 @@
+# Schema Diagram: Table Join Relationships
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    FINANCIAL_PROFILES (275)                                 │
+│  PK: user_id                                                                                 │
+│  ─────────────────────────────                                                              │
+│  home_currency, current_available_balance, minimum_balance_to_keep                          │
+│  financial_priorities, expense_categories_to_protect                                        │
+│  expense_categories_user_is_willing_to_reduce, expense_categories_user_is_willing_to_stop   │
+│  payment_methods_user_will_consider, max_installment_months                                 │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+                                                      │
+                    ┌─────────────────────────────────┼─────────────────────────────────┐
+                    ▼                                 ▼                                 ▼
+┌─────────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────┐
+│         REQUESTS (250)          │   │      FINANCIAL_EVENTS (25,342)  │   │         MESSAGES (215)          │
+│  PK: request_id                 │   │  PK: event_id                   │   │  PK: message_id                 │
+│  FK: user_id ───────────────────┼───┤  FK: user_id                    │   │  FK: user_id                    │
+│  ─────────────────────────────  │   │  ─────────────────────────────  │   │  ─────────────────────────────  │
+│  request_date                   │   │  event_type, description        │   │  request_id (128 linked)        │
+│  request_type                   │   │  category, direction            │   │  related_event_id (39 linked)   │
+│  requested_amount               │   │  amount (16 blank→images)       │   │  sent_at, source_type           │
+│  desired_completion_date        │   │  currency                       │   │  message_text                   │
+│  allows_partial_payment         │   │  event_date, settlement_date    │   └─────────────────────────────────┘
+│  request_text                   │   │  status (settled/pending/       │
+└─────────────────────────────────┘   │  scheduled/cancelled/failed/    │
+                    │                │  unrealized)                    │
+                    │                │  linked_event_id (58 linked)    │
+                    │                │  flexibility                    │
+                    │                │  minimum_allowed_amount         │
+                    │                └─────────────────────────────────┘
+                    │                               │
+                    │                               ▼
+                    │        ┌─────────────────────────────────┐
+                    │        │          IMAGES (16)            │
+                    │        │  PK: image_id                   │
+                    │        │  FK: user_id                    │
+                    │        │  FK: request_id                 │
+                    │        │  FK: related_event_id ──────────┤
+                    │        │  ─────────────────────────────  │
+                    │        │  File: dataset/media/images/    │
+                    │        │  {image_id}.png                 │
+                    │        └─────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────┐
+│   REQUEST_PAYMENT_OPTIONS (790) │
+│  PK: payment_option_id          │
+│  FK: request_id ────────────────┤
+│  ─────────────────────────────  │
+│  payment_method                 │
+│  payment_amount                 │
+│  number_of_payments             │
+│  first_payment_date             │
+│  payment_frequency_days         │
+│  financing_fee                  │
+│  total_payable_amount           │
+└─────────────────────────────────┘
+
+                    ┌─────────────────────────────────┐
+                    │       EXCHANGE_RATES (134)      │
+                    │  PK: (rate_date, from_currency, │
+                    │       to_currency)              │
+                    │  ─────────────────────────────  │
+                    │  rate_date (monthly 15th)       │
+                    │  from_currency, to_currency     │
+                    │  rate                           │
+                    └─────────────────────────────────┘
+                              ▲
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+                    ▼                   ▼
+        financial_events.currency    financial_profiles.home_currency
+        (on settlement_date)          (user's base currency)
+        
+        Join Logic:
+        1. For each financial_event with currency != user.home_currency
+        2. Find exchange_rate where rate_date = event.settlement_date (or nearest prior 15th)
+        3. Match from_currency = event.currency, to_currency = user.home_currency
+        4. If direct pair missing, chain via USD (e.g., EUR→USD→INR)
+        5. converted_amount = event.amount × rate
+
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    SAMPLE_REQUESTS (25)                                     │
+│  PK: request_id (request_01 through request_25)                                             │
+│  ─────────────────────────────────────────────────────────────────────────────────────────  │
+│  Contains ALL output fields as ground truth:                                                │
+│  amount_safe_to_pay, affordability_status, recommended_payment_method                       │
+│  payment_plan, earliest_date_for_full_payment, spending_changes_needed                      │
+│  decision_explanation                                                                       │
+│                                                                                              │
+│  NOTE: These are request_01-25; evaluation requests are request_26-275 (no overlap)         │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                      OUTPUT.CSV (250)                                       │
+│  PK: request_id (request_26 through request_275)                                            │
+│  ─────────────────────────────────────────────────────────────────────────────────────────  │
+│  Columns to populate:                                                                        │
+│  amount_safe_to_pay, affordability_status, recommended_payment_method                       │
+│  payment_plan, earliest_date_for_full_payment, spending_changes_needed                      │
+│  decision_explanation                                                                       │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+KEY RELATIONSHIP SUMMARY:
+
+1. financial_profiles.user_id → requests.user_id (1:many)
+2. financial_profiles.user_id → financial_events.user_id (1:many)
+3. financial_profiles.user_id → messages.user_id (1:many)
+4. requests.request_id → request_payment_options.request_id (1:many, 2-4 options)
+5. requests.request_id → messages.request_id (1:many, ~0.5 msg/request)
+6. requests.request_id → images.request_id (1:0 or 1, only 16 total)
+7. financial_events.event_id → images.related_event_id (1:0 or 1, only 16 total)
+8. financial_events.event_id → messages.related_event_id (1:0 or 1, 39 total)
+9. financial_events.event_id → financial_events.linked_event_id (self-ref, 58 pairs)
+10. exchange_rates ↔ financial_events: on (settlement_date, currency) → home_currency
