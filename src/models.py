@@ -339,3 +339,41 @@ def build_fx_index(rates_df) -> dict[tuple[date, str, str], Decimal]:
         key = (row["rate_date"], row["from_currency"], row["to_currency"])
         index[key] = Decimal(str(row["rate"]))
     return index
+
+
+class SpendingChange(BaseModel):
+    event_id: str
+    action: str  # 'stop' or 'reduce_to'
+    savings: float
+    new_amount: Optional[float] = None
+
+    def to_str(self) -> str:
+        if self.action == "stop":
+            return f"stop:{self.event_id}"
+        elif self.action == "reduce_to":
+            val_str = f"{self.new_amount:.2f}".rstrip('0').rstrip('.') if self.new_amount is not None else ""
+            return f"reduce_to:{self.event_id}:{val_str}"
+        return f"{self.action}:{self.event_id}"
+
+
+class SelectedPlan(BaseModel):
+    request_id: str
+    amount_safe_to_pay: float
+    affordability_status: str
+    recommended_payment_method: str
+    payment_plan: str
+    earliest_date_for_full_payment: Optional[str] = ""
+    spending_changes_needed: str = "none"
+    decision_explanation: str = ""
+
+    def to_output_row(self) -> dict:
+        return {
+            "request_id": self.request_id,
+            "amount_safe_to_pay": self.amount_safe_to_pay,
+            "affordability_status": self.affordability_status,
+            "recommended_payment_method": self.recommended_payment_method,
+            "payment_plan": self.payment_plan,
+            "earliest_date_for_full_payment": self.earliest_date_for_full_payment or "",
+            "spending_changes_needed": self.spending_changes_needed,
+            "decision_explanation": self.decision_explanation,
+        }
